@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cubes Shooter</title>
+    <style>
+        canvas:focus {
+            outline: none;
+        }
+
+        html, body {
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            height: 100%;
+        }
+
+        #unity-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #unity-canvas {
+            width: 100%;
+            height: 100%;
+            background: #CCCCCC;
+        }
+
+        #loading-cover {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: url('Images/background.jpg') center / cover;
+        }
+
+        #unity-loading-bar {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 320px; /* Фиксированная ширина для стабильности */
+        }
+
+        #unity-logo {
+            margin-bottom: 20px;
+            width: 280px; /* Фиксированная ширина для логотипа */
+            height: 140px; /* Фиксированная высота для логотипа */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #unity-logo img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* Сохранение пропорций */
+            display: block;
+        }
+
+        #unity-progress-bar-empty {
+            width: 300px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            margin-top: 10px;
+            border-radius: 10px;
+        }
+
+        #unity-progress-bar-full {
+            width: 0%;
+            height: 100%;
+            background-color: #ffffff;
+            border-radius: 10px;
+            transition: width 0.1s ease-in-out;
+        }
+
+        .spinner {
+            width: 30px;
+            height: 30px;
+            margin-top: 20px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .unity-mobile #unity-canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="unity-container" class="unity-desktop">
+        <canvas id="unity-canvas" tabindex="-1"></canvas>
+    </div>
+    <div id="loading-cover" style="display:block;">
+        <div id="unity-loading-bar">
+            <div id="unity-logo"><img src="Images/logo.png"></div>
+            <div id="unity-progress-bar-empty">
+                <div id="unity-progress-bar-full"></div>
+            </div>
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        const buildUrl = "Build";
+        const loaderUrl = buildUrl + "/SliceWarriorForSite.loader.js";
+        const config = {
+            dataUrl: buildUrl + "/SliceWarriorForSite.data",
+            frameworkUrl: buildUrl + "/SliceWarriorForSite.framework.js",
+            codeUrl: buildUrl + "/SliceWarriorForSite.wasm",
+            streamingAssetsUrl: "StreamingAssets",
+            companyName: "MemorySharp",
+            productName: "Cubes Shooter",
+            productVersion: "0.1.3"
+        };
+
+        const container = document.querySelector("#unity-container");
+        const canvas = document.querySelector("#unity-canvas");
+        const loadingCover = document.querySelector("#loading-cover");
+        const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
+        const progressBarFull = document.querySelector("#unity-progress-bar-full");
+        const spinner = document.querySelector('.spinner');
+        
+        // Установка фона и отображения для экрана загрузки
+        loadingCover.style.background = "url('Images/background.jpg') center / cover";
+        loadingCover.style.display = "block";
+        
+        let gameInstance = null;
+        const sdkInitialized = true; // Имитация инициализации SDK
+
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            container.className = "unity-mobile";
+            config.devicePixelRatio = 1;
+        }
+
+        // Предотвращение контекстного меню
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // Фокус на игре
+        function focusGame() {
+            window.focus();
+            canvas.focus();
+        }
+        window.addEventListener('pointerdown', focusGame);
+        window.addEventListener('touchstart', focusGame);
+
+        // Обработка видимости страницы
+        document.addEventListener('visibilitychange', function() {
+            if (gameInstance && typeof gameInstance.SendMessage === "function") {
+                if (document.hidden) {
+                    gameInstance.SendMessage('YG2Instance', 'SetFocusWindowGame', 'false');
+                } else {
+                    gameInstance.SendMessage('YG2Instance', 'SetFocusWindowGame', 'true');
+                }
+            }
+        });
+
+        // Загрузка Unity
+        const script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+            createUnityInstance(canvas, config, (progress) => {
+                spinner.style.display = "none";
+                progressBarEmpty.style.display = "block";
+                progressBarFull.style.width = `${100 * Math.max(progress, 0.05)}%`;
+            }).then((unityInstance) => {
+                gameInstance = unityInstance;
+                loadingCover.style.display = "none";
+                
+                // Сообщаем Unity, что всё готово
+                if (typeof gameInstance.SendMessage === "function") {
+                    gameInstance.SendMessage('YG2Instance', 'InitSDKComplete');
+                    setTimeout(() => gameInstance.SendMessage('YG2Instance', 'InitGame'), 100);
+                }
+            }).catch((message) => {
+                console.error("Unity initialization error:", message);
+            });
+        };
+
+        document.body.appendChild(script);
+    </script>
+
+<script>console.log('%c' + 'PluginYG2 v2.0031  build: 386', 'color: #FFDF73; background-color: #454545');</script>
+</body>
+</html>
